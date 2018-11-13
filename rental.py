@@ -1,7 +1,7 @@
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-import math
+import math,sys
 import re
 from lxml import etree
 import time
@@ -10,7 +10,7 @@ import pymongo
 import requests
 
 DB = "shzu"
-base_url = "https://sh.zu.ke.com"
+base_url = "https://bj.zu.ke.com"
 
 def get_disctricts():
     url = base_url + "/zufang/"
@@ -33,7 +33,7 @@ def get_disctricts():
 def get_sub_districts():
     districts = get_disctricts()
     result = []
-    client = pymongo.MongoClient()
+    client = pymongo.MongoClient("mongodb://whlweb:whlweb@whlmongo-shard-00-00-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-01-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-02-akqd8.azure.mongodb.net:27017/test?ssl=true&replicaSet=whlmongo-shard-0&authSource=admin&retryWrites=true")
     db = client[DB]
     for item in districts:
         distr_name = item[0]
@@ -67,10 +67,11 @@ def get_houses_by_sub_district(sub_distr_id, entry_url):
     total_num = get_item_num(entry_url)
     last_page = math.ceil(total_num/30)
     i = 1
-    client = pymongo.MongoClient()
+    client = pymongo.MongoClient("mongodb://whlweb:whlweb@whlmongo-shard-00-00-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-01-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-02-akqd8.azure.mongodb.net:27017/test?ssl=true&replicaSet=whlmongo-shard-0&authSource=admin&retryWrites=true")
     db = client[DB]
     for i in range(1, last_page+1, 1):
         url = url_patt.format(i)
+        print(url)
         r = requests.get(url, verify=False)
         content = r.content.decode("utf-8")
         root = etree.HTML(content)
@@ -117,6 +118,10 @@ def get_houses_by_sub_district(sub_distr_id, entry_url):
                 price_node = price_nodes[0]
                 price_info = price_node.text
 
+            publish_dates = div_node.xpath('.//p[contains(@class, content__list--item--time)]')
+            publish_date=publish_dates[3]
+            publish_info=publish_date.text.strip()
+
             item = {
                 "sub_distr_id": sub_distr_id,
                 "title": title,
@@ -125,25 +130,26 @@ def get_houses_by_sub_district(sub_distr_id, entry_url):
                 "direction": direction,
                 "room_type": room_type,
                 "price_info": price_info,
+                "publish_info": publish_info
             }
             db.house.insert_one(item)
         i += 1
 
 def get_all_houses():
-    client = pymongo.MongoClient()
+    client = pymongo.MongoClient("mongodb://whlweb:whlweb@whlmongo-shard-00-00-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-01-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-02-akqd8.azure.mongodb.net:27017/test?ssl=true&replicaSet=whlmongo-shard-0&authSource=admin&retryWrites=true")
     db = client[DB]
     sub_distr_rows = db.sub_districts.find()
-    start = 1
+    start = 0
     for sub_distr in sub_distr_rows:
         entry_url = sub_distr["url"]
         sub_distr_id = sub_distr["_id"]
         distr_name = sub_distr["district"]
         sub_distr_name = sub_distr["sub_district"]
-        print(distr_name, sub_distr_name)
-        #if distr_name == "福田区" and sub_distr_name == "银湖":
-        #    start = 1
+        if distr_name == "昌平" and sub_distr_name == "立水桥":
+            start = 1
         if start == 1:
             get_houses_by_sub_district(sub_distr_id, entry_url)
+            start=0
 
 def parse_house_info(house_info):
     items = house_info.split("|")
@@ -199,12 +205,12 @@ def parse_house_info(house_info):
     return result
 
 def update_house_info():
-    client = pymongo.MongoClient()
+    client = pymongo.MongoClient("mongodb://whlweb:whlweb@whlmongo-shard-00-00-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-01-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-02-akqd8.azure.mongodb.net:27017/test?ssl=true&replicaSet=whlmongo-shard-0&authSource=admin&retryWrites=true")
     db = client[DB]
     houses = db.house.find()
     for house in houses:
         object_id = house["_id"]
-        price_num = float(house["price_num"])
+        price_num = float(house["price_info"])
         unit_price = float(house["unit_price"])
         building_info = house["building_info"]
         matched = re.search(r'(\d+)年', building_info)
@@ -216,7 +222,7 @@ def update_house_info():
         db.house.update({"_id": house["_id"]}, {"$set": info})
 
 def stats():
-    client = pymongo.MongoClient()
+    client = pymongo.MongoClient("mongodb://whlweb:whlweb@whlmongo-shard-00-00-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-01-akqd8.azure.mongodb.net:27017,whlmongo-shard-00-02-akqd8.azure.mongodb.net:27017/test?ssl=true&replicaSet=whlmongo-shard-0&authSource=admin&retryWrites=true")
     db = client[DB]
 
     print("=========== most expensive =============")
@@ -391,4 +397,4 @@ def stats():
         print(house["title"], house["url"], house["xiaoqu_name"], house["price_num"], house["unit_price"])
 
 if __name__ == "__main__":
-    get_all_houses()
+   get_all_houses()
