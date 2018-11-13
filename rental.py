@@ -9,7 +9,7 @@ import json
 import pymongo
 import requests
 
-DB = "shzu"
+DB = "bjzu"
 base_url = "https://bj.zu.ke.com"
 
 def get_disctricts():
